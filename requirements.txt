@@ -1,2 +1,5 @@
 streamlit
+gssapi
+pandas
+geopandas
 arcgis

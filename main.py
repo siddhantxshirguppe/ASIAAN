@@ -1,5 +1,7 @@
 import streamlit as st
 from arcgis.features import FeatureLayer
+import pandas as pd
+
 #---window options-----
 
 # Set wide layout
@@ -38,10 +40,11 @@ def feature_layer_editor():
     FEATURE_LAYER_URL = "https://services.arcgis.com/GL0fWlNkwysZaKeV/arcgis/rest/services/google_sheet_feature_layer_02/FeatureServer/0"
     layer = FeatureLayer(FEATURE_LAYER_URL)
 
-    # --- Query All Features ---
-    with st.spinner("Loading data from ArcGIS..."):
+    # --- Query features (raw JSON) ---
+    with st.spinner("Fetching data from ArcGIS..."):
         features = layer.query(where="1=1", out_fields="*", return_geometry=False)
-        df = features.sdf  # Spatial DataFrame (like pandas)
+        raw_data = [f.attributes for f in features.features]  # extract attributes from each feature
+        df = pd.DataFrame(raw_data)
 
     # --- Show as scrollable table ---
     st.subheader("Service Centers")
