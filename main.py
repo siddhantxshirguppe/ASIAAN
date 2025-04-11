@@ -65,16 +65,39 @@ def feature_layers_viewer():
         df = pd.DataFrame(raw_data)
 
     # --- Show as scrollable table ---
-    st.subheader("Service Centers 0")
+    st.subheader("Service Centers")
     st.dataframe(df, height=500, use_container_width=True)
 
     if not df.empty:
-        selected_index = st.number_input("🔍 Enter row number to edit:", min_value=0, max_value=len(df) - 1, step=1)
-        if st.button("✏️ Edit Selected Entry"):
-            st.session_state.selected_record = df.loc[selected_index].to_dict()
-            st.session_state.object_id = df.loc[selected_index]['ObjectId']
-            st.session_state.page = 'edit'
-            st.rerun()
+        selected_index = st.number_input("🔍 Enter row number to edit or delete:", min_value=0, max_value=len(df) - 1, step=1)
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            if st.button("✏️ Edit Selected Entry"):
+                st.session_state.selected_record = df.loc[selected_index].to_dict()
+                st.session_state.object_id = df.loc[selected_index]['ObjectId']
+                st.session_state.page = 'edit'
+                st.rerun()
+
+        with col2:
+            if st.button("🗑️ Delete Selected Entry"):
+                object_id_to_delete = df.loc[selected_index]['ObjectId']
+                try:
+                    result = layer.edit_features(deletes=str(object_id_to_delete))
+                    success = result.get("deleteResults", [{}])[0].get("success", False)
+                    if success:
+                        st.success(f"✅ Entry with ObjectId {object_id_to_delete} deleted successfully!")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ Failed to delete entry with ObjectId {object_id_to_delete}.")
+                except Exception as e:
+                    st.error(f"❌ Error during deletion: {e}")
+        with col3:
+            if st.button("➕ Create New Entry"):
+                st.session_state.selected_record = {}  # empty dict for new entry
+                st.session_state.page = "create"
+                st.rerun()
 
 
 def get_lat_lng_from_address(address: str):
@@ -107,7 +130,96 @@ def get_place_suggestions(input_text):
     response = requests.get(url, params=params)
     suggestions = response.json().get("predictions", [])
     return [s['description'] for s in suggestions]
-    
+
+
+def show_create_page():
+    st.title("➕ Create New Feature Entry")
+
+    # Fields with binary (0/1) values
+    binary_fields = [
+        'Home_Health_Services', 'Adult_Day_Services', 'Benefits_Counseling', 'Elder_Housing_Resources',
+        'Assisted_Living', 'Elder_Abuse', 'Home_Repair', 'Immigration_Assistance',
+        'Long_term_Care_Ombudsman', 'Long_term_Care_Nursing_Homes', 'Senior_Exercise_Programs',
+        'Dementia_Support_Programs', 'Transportation', 'Senior_Centers', 'Caregiver_Support_Services',
+        'Case_Management', 'Congregate_Meals', 'Financial_Counseling', 'Health_Education_Workshops',
+        'Home_Delivered_Meals', 'Hospice_Care', 'Technology_Training', 'Cultural_Programming',
+        'Mental_Health', 'Vaccinations_Screening'
+    ]
+
+    new_entry = {}
+    errors = []
+
+    # Address Suggestor
+    if "new_address" not in st.session_state:
+        st.session_state.new_address = ""
+    if "new_lat" not in st.session_state:
+        st.session_state.new_lat = ""
+    if "new_lng" not in st.session_state:
+        st.session_state.new_lng = ""
+
+    address_input = st.text_input("🔍 Search Address", value=st.session_state.new_address, key="new_address_input")
+
+    suggestions = []
+    if len(address_input.strip()) >= 3:
+        suggestions = get_place_suggestions(address_input)
+
+    if suggestions:
+        suggestions_display = ["-- Select an address --"] + suggestions
+        selected_address = st.selectbox("📍 Suggestions", suggestions_display, index=0, key="create_address_suggestion")
+
+        if selected_address != "-- Select an address --" and selected_address != st.session_state.new_address:
+            st.session_state.new_address = selected_address
+            lat, lng = get_lat_lng_from_address(selected_address)
+            st.session_state.new_lat = str(lat)
+            st.session_state.new_lng = str(lng)
+            st.rerun()
+
+    with st.form("create_form"):
+        new_entry["Name"] = st.text_input("Name")
+        new_entry["Phone_number"] = st.text_input("Phone Number (format: 123-456-7890)")
+        if not re.fullmatch(r"\d{3}-\d{3}-\d{4}", new_entry["Phone_number"]):
+            errors.append("📞 Invalid phone number format.")
+
+        new_entry["Address"] = st.text_input("Address", value=st.session_state.new_address, disabled=True)
+        new_entry["Address_w_suit__"] = st.text_input("Address with Suite")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            new_entry["Latitude"] = st.text_input("Latitude", value=st.session_state.new_lat, disabled=True)
+        with col2:
+            new_entry["Longitude"] = st.text_input("Longitude", value=st.session_state.new_lng, disabled=True)
+
+        st.markdown("### 🧩 Service Availability Fields")
+        for i in range(0, len(binary_fields), 5):
+            cols = st.columns(5)
+            for j in range(5):
+                if i + j < len(binary_fields):
+                    field = binary_fields[i + j]
+                    with cols[j]:
+                        new_entry[field] = st.selectbox(field, [0, 1], index=0, key=f"new_{field}")
+
+        submitted = st.form_submit_button("✅ Submit New Entry")
+
+    if submitted:
+        if errors:
+            for err in errors:
+                st.error(err)
+        else:
+            try:
+                response = layer.edit_features(adds=[{"attributes": new_entry}])
+                if response['addResults'][0].get("success"):
+                    st.success("✅ New entry added successfully!")
+                    st.session_state.page = "view"
+                    st.rerun()
+                else:
+                    st.error("❌ Failed to add new entry.")
+            except Exception as e:
+                st.error(f"❌ Error: {e}")
+
+    if st.button("⬅️ Back to Table"):
+        st.session_state.page = 'view'
+        st.rerun()
+
 def show_edit_page():
     st.title("✏️ Edit Feature Entry")
 
@@ -248,5 +360,7 @@ if st.session_state.logged_in:
         feature_layers_viewer()
     elif st.session_state.page == 'edit':
         show_edit_page()
+    elif st.session_state.page == 'create':
+        show_create_page()
 else:
     login_page()
