@@ -3,6 +3,16 @@ from arcgis.features import FeatureLayer
 import pandas as pd
 import re
 import requests
+import warnings
+from dotenv import load_dotenv
+import os
+
+
+#---secreett variabel keys
+
+load_dotenv()
+
+google_api_key = os.getenv("GOOGLE_MAPS_API_KEY")
 #---window options-----
 
 # Set wide layout
@@ -11,6 +21,7 @@ st.set_page_config(
     layout="wide",  # 👈 this makes the app use the full width of the browser
 )
 
+warnings.filterwarnings("ignore", category=SyntaxWarning)
 
 # --- Configuration ---
 ACCESS_CODE = "asiaan"  # Replace with your own secret code
@@ -36,11 +47,26 @@ if "total_count" not in st.session_state:
     count_result = layer.query(where="1=1", return_count_only=True)
     st.session_state.total_count = count_result
 
+    # Address Suggestor
+    if "new_address" not in st.session_state:
+        st.session_state.new_address = ""
+    if "new_lat" not in st.session_state:
+        st.session_state.new_lat = ""
+    if "new_lng" not in st.session_state:
+        st.session_state.new_lng = ""
 
+    # Address Suggestor
+    if "update_address" not in st.session_state:
+        st.session_state.update_address = ""
+    if "update_lat" not in st.session_state:
+        st.session_state.update_lat = ""
+    if "update_lng" not in st.session_state:
+        st.session_state.update_lng = ""
 
 
 # --- Login Page ---
 def login_page():
+    st.title("api key is"+google_api_key)
     st.title("🔐 ArcGIS Data Entry App")
     st.write("Please enter the access code to continue.")
 
@@ -149,13 +175,7 @@ def show_create_page():
     new_entry = {}
     errors = []
 
-    # Address Suggestor
-    if "new_address" not in st.session_state:
-        st.session_state.new_address = ""
-    if "new_lat" not in st.session_state:
-        st.session_state.new_lat = ""
-    if "new_lng" not in st.session_state:
-        st.session_state.new_lng = ""
+
 
     address_input = st.text_input("🔍 Search Address", value=st.session_state.new_address, key="new_address_input")
 
@@ -259,22 +279,22 @@ def show_edit_page():
 
     # Address Suggestor
     default_address = st.session_state.selected_record.get("Address", "")
-    user_input = st.text_input("🔍 Search Address", value=default_address, key="address_suggestor")
+    #user_input = st.text_input("🔍 Search Address", value=default_address, key="address_suggestor")
 
+    user_input = st.text_input("🔍 Search Address", value=st.session_state.update_address, key="edit_address_input")
     suggestions = []
     if len(user_input.strip()) >= 3:
         suggestions = get_place_suggestions(user_input)
 
     if suggestions:
-        selected_address = st.selectbox("📍 Suggestions", suggestions, index=0)
-        if selected_address and selected_address != st.session_state.selected_record["Address"]:
-            st.session_state.selected_record["Address"] = selected_address
-            st.session_state["address_updated"] = True  # <-- set a flag
+        suggestions_display = ["-- Select an address --"] + suggestions
+        selected_address = st.selectbox("📍 Suggestions", suggestions_display, index=0, key="edit_address_suggestion")
 
+        if selected_address != "-- Select an address --" and selected_address != st.session_state.update_address:
+            st.session_state.update_address = selected_address
             lat, lng = get_lat_lng_from_address(selected_address)
-            st.session_state.selected_record["Latitude"] = str(lat)
-            st.session_state.selected_record["Longitude"] = str(lng)
-
+            st.session_state.update_lat = str(lat)
+            st.session_state.update_lng = str(lng)
             st.rerun()
 
     with st.form("edit_form"):
@@ -296,14 +316,14 @@ def show_edit_page():
                 binary_inputs[key] = value  # delay rendering for grouped layout
 
             elif key == "Address":
-                updated_address = st.session_state.selected_record.get("Address", str(value))
-                edited[key] = st.text_input("Address", updated_address, disabled=True)
+                edited[key] = st.text_input("Address", value=st.session_state.update_address, disabled=True)               
+
             elif key == "Address_w_suit__":
                 addr_suite = (key, value)
             elif key == "Latitude":
-                lat = (key, st.session_state.selected_record.get("Latitude", str(value)))
+                edited[key] = st.text_input("Latitude", value=st.session_state.update_lat, disabled=True)
             elif key == "Longitude":
-                lng = (key, st.session_state.selected_record.get("Longitude", str(value)))
+                edited[key] = st.text_input("Longitude", value=st.session_state.update_lng, disabled=True)
             else:
                 edited[key] = st.text_input(key, str(value))
 
