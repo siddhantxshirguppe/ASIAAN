@@ -4,15 +4,7 @@ import pandas as pd
 import re
 import requests
 import warnings
-from dotenv import load_dotenv
-import os
 
-
-#---secreett variabel keys
-
-load_dotenv()
-
-google_api_key = os.getenv("GOOGLE_MAPS_API_KEY")
 #---window options-----
 
 # Set wide layout
@@ -24,12 +16,12 @@ st.set_page_config(
 warnings.filterwarnings("ignore", category=SyntaxWarning)
 
 # --- Configuration ---
-ACCESS_CODE = "asiaan"  # Replace with your own secret code
+ACCESS_CODE = st.secrets["ADMIN_CODE"]  # Replace with your own secret code
 
 
 # --- Connect to your public Feature Layer ---
-FEATURE_LAYER_URL = "https://services.arcgis.com/GL0fWlNkwysZaKeV/arcgis/rest/services/service_centers_layer001/FeatureServer/0"
-API_KEY = "AIzaSyABqBYQvmQslBih1UjIIciTMdK6sxPOm_U"
+FEATURE_LAYER_URL = st.secrets["ARCGIS_FEATURE_LAYER"] 
+API_KEY = st.secrets["GOOGLE_MAPS_API_KEY"]
 layer = FeatureLayer(FEATURE_LAYER_URL)
 
 
@@ -66,14 +58,13 @@ if "total_count" not in st.session_state:
 
 # --- Login Page ---
 def login_page():
-    st.title("api key is"+google_api_key)
     st.title("🔐 ArcGIS Data Entry App")
     st.write("Please enter the access code to continue.")
 
     code = st.text_input("Access Code", type="password")
 
     if st.button("Login"):
-        if code.lower() == ACCESS_CODE.lower():
+        if code == ACCESS_CODE:
             st.session_state.logged_in = True
             st.rerun()
         else:
