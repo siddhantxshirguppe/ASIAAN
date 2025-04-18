@@ -17,7 +17,7 @@ warnings.filterwarnings("ignore", category=SyntaxWarning)
 
 # --- Configuration ---
 ACCESS_CODE = st.secrets["ADMIN_CODE"]  # Replace with your own secret code
-
+GUEST_CODE = st.secrets["USER_CODE"] 
 
 # --- Connect to your public Feature Layer ---
 FEATURE_LAYER_URL = st.secrets["ARCGIS_FEATURE_LAYER"] 
@@ -28,6 +28,8 @@ layer = FeatureLayer(FEATURE_LAYER_URL)
 # --- Session Setup ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
+if 'login_mode' not in st.session_state:
+    st.session_state.login_mode = "guest"
 if 'selected_record' not in st.session_state:
     st.session_state.selected_record = {}
 if "page" not in st.session_state:
@@ -66,7 +68,12 @@ def login_page():
     if st.button("Login"):
         if code == ACCESS_CODE:
             st.session_state.logged_in = True
+            st.session_state.login_mode = "admin"
             st.rerun()
+        elif code == GUEST_CODE:
+            st.session_state.logged_in = True
+            st.session_state.login_mode = "guest"
+            st.rerun()       
         else:
             st.error("Invalid access code. Please try again.")
 
@@ -91,14 +98,14 @@ def feature_layers_viewer():
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            if st.button("✏️ Edit Selected Entry"):
+            if st.button("✏️ Edit Selected Entry",disabled=(st.session_state.login_mode != "admin")):
                 st.session_state.selected_record = df.loc[selected_index].to_dict()
                 st.session_state.object_id = df.loc[selected_index]['ObjectId']
                 st.session_state.page = 'edit'
                 st.rerun()
 
         with col2:
-            if st.button("🗑️ Delete Selected Entry"):
+            if st.button("🗑️ Delete Selected Entry",disabled=(st.session_state.login_mode != "admin")):
                 object_id_to_delete = df.loc[selected_index]['ObjectId']
                 try:
                     result = layer.edit_features(deletes=str(object_id_to_delete))
@@ -111,7 +118,7 @@ def feature_layers_viewer():
                 except Exception as e:
                     st.error(f"❌ Error during deletion: {e}")
         with col3:
-            if st.button("➕ Create New Entry"):
+            if st.button("➕ Create New Entry",disabled=(st.session_state.login_mode != "admin")):
                 st.session_state.selected_record = {}  # empty dict for new entry
                 st.session_state.page = "create"
                 st.rerun()
